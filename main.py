@@ -1,6 +1,8 @@
 import pandas as pd
 pd.set_option('display.precision', 6)
 import random
+import plotly.graph_objects as go
+import plotly.express as px
 
 def add_probabilities(df):
     df['P_WALK'] = (df['BB'] + df['HBP']) / df['PA']
@@ -38,6 +40,8 @@ def simulate_at_bat(at_bat):
         return "OUT"
 
 def simulate_game(df):
+    scorecard = {}
+    scorecard[0] = 0
     runs = 0
     batter_i = -1
 
@@ -193,7 +197,17 @@ def simulate_game(df):
                         runs += 4
                 bases = 0b000
                 continue
-    return runs
+        
+        scorecard[inning] = runs
+
+    return scorecard
+
+
+def monte_carlo(df):
+    n = 1000
+    for _ in range(n):
+        scorecard = simulate_game(df)
+
 
 def main():
     home_batting = pd.read_csv('home_batting.csv')
