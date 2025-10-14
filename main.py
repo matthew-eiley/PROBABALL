@@ -1,5 +1,6 @@
 import pandas as pd
 pd.set_option('display.precision', 6)
+import random
 
 def add_probabilities(df):
     df['P_WALK'] = (df['BB'] + df['HBP']) / df['PA']
@@ -9,16 +10,38 @@ def add_probabilities(df):
     df['P_HR'] = df['HR'] / df['PA']
     df['P_SACRIFICE'] = (df['SF'] + df['SH']) / df['PA']
     df['P_OUT'] = 1 - (df['P_WALK'] + df['P_1'] + df['P_2'] + df['P_3'] + df['P_HR'] + df['P_SACRIFICE'])
-    df['prob_total'] = df[['P_WALK', 'P_1', 'P_2', 'P_3', 'P_HR', 'P_SACRIFICE', 'P_OUT']].sum(axis=1)
+    # df['prob_total'] = df[['P_WALK', 'P_1', 'P_2', 'P_3', 'P_HR', 'P_SACRIFICE', 'P_OUT']].sum(axis=1)
 
 def simulate_at_bat(at_bat):
-    return "OUT"
+    rand = random.random()
+    
+    p_walk = at_bat['P_WALK']
+    p_single = p_walk + at_bat['P_1']
+    p_double = p_single + at_bat['P_2']
+    p_triple = p_double + at_bat['P_3']
+    p_hr = p_triple + at_bat['P_HR']
+    p_sacrifice = p_hr + at_bat['P_SACRIFICE']
+    
+    if rand < p_walk:
+        return "WALK"
+    elif rand < p_single:
+        return "SINGLE"
+    elif rand < p_double:
+        return "DOUBLE"
+    elif rand < p_triple:
+        return "TRIPLE"
+    elif rand < p_hr:
+        return "HOME_RUN"
+    elif rand < p_sacrifice:
+        return "SACRIFICE"
+    else:
+        return "OUT"
 
 def simulate_game(df):
     runs = 0
     batter_i = -1
 
-    for _ in range(9): # INNINGS
+    for inning in range(1,10): # INNINGS
         outs = 0 # each inning starts with 0 outs
         bases = 0b000 # each inning starts with empty bases
 
@@ -26,7 +49,7 @@ def simulate_game(df):
             batter_i = (batter_i + 1) % len(df) # cycle through batters
             at_bat = df.iloc[batter_i] # get batter data
             batting_results = simulate_at_bat(at_bat) # simuate at bat
-
+            # print(f"INNING {inning}, OUTS: {outs}, RUNS: {runs}, BASES: {bases:03b}\nBATTER {at_bat['name']} - RESULT {batting_results}\n")
             if batting_results == "OUT":
                 outs += 1
                 continue
@@ -170,6 +193,7 @@ def simulate_game(df):
                         runs += 4
                 bases = 0b000
                 continue
+    return runs
 
 def main():
     home_batting = pd.read_csv('home_batting.csv')
@@ -178,10 +202,10 @@ def main():
     add_probabilities(home_batting)
     add_probabilities(away_batting)
 
-    simulate_game(home_batting)
+    monte_carlo(home_batting)
 
-    print(home_batting.iloc[:, 10:])
-    print(away_batting.iloc[:, 10:])
+    print(home_batting)
+    print(away_batting)
 
 if __name__ == "__main__":
     main()
