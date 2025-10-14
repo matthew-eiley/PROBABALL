@@ -3,6 +3,8 @@ pd.set_option('display.precision', 6)
 import random
 import plotly.graph_objects as go
 import plotly.express as px
+import numpy as np
+from scipy import stats
 
 def add_probabilities(df):
     df['P_WALK'] = (df['BB'] + df['HBP']) / df['PA']
@@ -212,41 +214,127 @@ def simulate_monte_carlo(df, n=1000):
 
 
 def plot_monte_carlo(all_scorecards, team_name="Team"):
+    # Convert scorecards to a format suitable for plotting
+    data = []
+    for i, scorecard in enumerate(all_scorecards):
+        for inning, runs in scorecard.items():
+            data.append({'Game': i+1, 'Inning': inning, 'Cumulative_Runs': runs})
+    
+    df_plot = pd.DataFrame(data)
+    
     fig = go.Figure()
     
-    for i, scorecard in enumerate(all_scorecards):
-        innings = list(scorecard.keys())
-        runs = list(scorecard.values())
-        
+    # Plot individual games as thin lines with points
+    for game_id in df_plot['Game']:#.unique()[:100]:
+        game_data = df_plot[df_plot['Game'] == game_id]
         fig.add_trace(go.Scatter(
-            x=innings,
-            y=runs,
+            x=game_data['Inning'],
+            y=game_data['Cumulative_Runs'],
             mode='lines+markers',
-            name=f'Game {i+1}',
-            line=dict(width=1),
-            opacity=0.3,
-            showlegend=False  # Don't show legend for individual games (too many)
+            name=f'Game {game_id}',
+            line=dict(width=1, color='rgba(0,0,0,0.25)'),
+            marker=dict(size=4, color='rgba(0,0,0,0.25)'),
+            showlegend=False,
+            hovertemplate='<b>Game %{customdata}</b><br>Inning: %{x}<br>Cumulative Runs: %{y}<extra></extra>',
+            customdata=[game_id] * len(game_data)
         ))
     
-    avg_scorecard = {}
-    for inning in range(10):
-        avg_runs = sum(scorecard.get(inning, 0) for scorecard in all_scorecards) / len(all_scorecards)
-        avg_scorecard[inning] = avg_runs
-    
+    # Calculate and plot median with larger points
+    median_data = df_plot.groupby('Inning')['Cumulative_Runs'].median().reset_index()
     fig.add_trace(go.Scatter(
-        x=list(avg_scorecard.keys()),
-        y=list(avg_scorecard.values()),
+        x=median_data['Inning'],
+        y=median_data['Cumulative_Runs'],
         mode='lines+markers',
-        name=f'Average ({team_name})',
+        name='MEDIAN',
         line=dict(width=3, color='red'),
-        opacity=1.0
+        marker=dict(size=12, color='red'),
+        hovertemplate='<b>MEDIAN</b><br>Inning: %{x}<br>Cumulative Runs: %{y}<extra></extra>'
+    ))
+    
+    # Calculate and plot mean with larger points
+    mean_data = df_plot.groupby('Inning')['Cumulative_Runs'].mean().reset_index()
+    fig.add_trace(go.Scatter(
+        x=mean_data['Inning'],
+        y=mean_data['Cumulative_Runs'],
+        mode='lines+markers',
+        name='MEAN',
+        line=dict(width=3, color='blue'),
+        marker=dict(size=12, color='blue'),
+        hovertemplate='<b>MEAN</b><br>Inning: %{x}<br>Cumulative Runs: %{y:.2f}<extra></extra>'
     ))
     
     fig.update_layout(
         title=f'{team_name} Monte Carlo Simulation - Runs by Inning',
         xaxis_title='Inning',
         yaxis_title='Cumulative Runs',
-        hovermode='x unified'
+        hovermode='closest',
+        width=1200,
+        height=800
+    )
+    
+    return fig
+
+def plot_runs_histogram(all_scorecards, team_name="Team"):
+    # Extract final runs (inning 9) from each game
+    final_runs = [scorecard[9] for scorecard in all_scorecards]
+    
+    # Calculate statistics
+    mean_runs = np.mean(final_runs)
+    median_runs = np.median(final_runs)
+    std_runs = np.std(final_runs)
+    
+    # Create histogram
+    fig = go.Figure()
+    
+    fig.add_trace(go.Histogram(
+        x=final_runs,
+        nbinsx=max(final_runs) - min(final_runs) + 1,
+        name='Games',
+        marker=dict(color='skyblue', opacity=0.7, line=dict(color='black', width=0.5)),
+        hovertemplate='Runs: %{x}<br>Count: %{y}<extra></extra>'
+    ))
+    
+    # Add mean line
+    fig.add_vline(
+        x=mean_runs,
+        line_dash="dash",
+        line_color="red",
+        line_width=2,
+        annotation_text=f'Mean: {mean_runs:.2f}',
+        annotation_position="top right"
+    )
+    
+    # Add median line
+    fig.add_vline(
+        x=median_runs,
+        line_dash="dash",
+        line_color="orange",
+        line_width=2,
+        annotation_text=f'Median: {median_runs:.2f}',
+        annotation_position="top left"
+    )
+    
+    # Add statistics text box
+    stats_text = f'Total Games: {len(final_runs)}<br>Min: {min(final_runs)}<br>Max: {max(final_runs)}<br>Std Dev: {std_runs:.2f}'
+    
+    fig.add_annotation(
+        text=stats_text,
+        xref="paper", yref="paper",
+        x=0.02, y=0.98,
+        xanchor="left", yanchor="top",
+        showarrow=False,
+        bgcolor="white",
+        bordercolor="black",
+        borderwidth=1
+    )
+    
+    fig.update_layout(
+        title=f'{team_name} - Distribution of Total Runs After 9 Innings',
+        xaxis_title='Total Runs',
+        yaxis_title='Number of Games',
+        width=1200,
+        height=600,
+        showlegend=False
     )
     
     return fig
@@ -259,8 +347,13 @@ def main():
     add_probabilities(home_batting)
     add_probabilities(away_batting)
 
-    all_scorecards = simulate_monte_carlo(home_batting)
-    plot_monte_carlo(all_scorecards, team_name="Home Team").show()
+    all_scorecards = simulate_monte_carlo(home_batting, 2000)
+    
+    fig1 = plot_monte_carlo(all_scorecards, team_name="home_batting")
+    fig1.show()
+    
+    fig2 = plot_runs_histogram(all_scorecards, team_name="home_batting")
+    fig2.show()
 
 
 if __name__ == "__main__":
