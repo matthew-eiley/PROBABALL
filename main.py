@@ -203,10 +203,53 @@ def simulate_game(df):
     return scorecard
 
 
-def monte_carlo(df):
-    n = 1000
+def simulate_monte_carlo(df, n=1000):
+    all_scorecards = []
     for _ in range(n):
         scorecard = simulate_game(df)
+        all_scorecards.append(scorecard)
+    return all_scorecards
+
+
+def plot_monte_carlo(all_scorecards, team_name="Team"):
+    fig = go.Figure()
+    
+    for i, scorecard in enumerate(all_scorecards):
+        innings = list(scorecard.keys())
+        runs = list(scorecard.values())
+        
+        fig.add_trace(go.Scatter(
+            x=innings,
+            y=runs,
+            mode='lines+markers',
+            name=f'Game {i+1}',
+            line=dict(width=1),
+            opacity=0.3,
+            showlegend=False  # Don't show legend for individual games (too many)
+        ))
+    
+    avg_scorecard = {}
+    for inning in range(10):
+        avg_runs = sum(scorecard.get(inning, 0) for scorecard in all_scorecards) / len(all_scorecards)
+        avg_scorecard[inning] = avg_runs
+    
+    fig.add_trace(go.Scatter(
+        x=list(avg_scorecard.keys()),
+        y=list(avg_scorecard.values()),
+        mode='lines+markers',
+        name=f'Average ({team_name})',
+        line=dict(width=3, color='red'),
+        opacity=1.0
+    ))
+    
+    fig.update_layout(
+        title=f'{team_name} Monte Carlo Simulation - Runs by Inning',
+        xaxis_title='Inning',
+        yaxis_title='Cumulative Runs',
+        hovermode='x unified'
+    )
+    
+    return fig
 
 
 def main():
@@ -216,10 +259,9 @@ def main():
     add_probabilities(home_batting)
     add_probabilities(away_batting)
 
-    monte_carlo(home_batting)
+    all_scorecards = simulate_monte_carlo(home_batting)
+    plot_monte_carlo(all_scorecards, team_name="Home Team").show()
 
-    print(home_batting)
-    print(away_batting)
 
 if __name__ == "__main__":
     main()
